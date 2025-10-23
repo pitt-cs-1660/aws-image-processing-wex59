@@ -1,0 +1,179 @@
+name: Grading Checks
+
+on:
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      pitt_id:
+        description: 'Your pitt id'
+        type: string
+        required: true
+        default: 'xzy123'
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  check-s3-bucket:
+    name: Check S3 Bucket Structure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Test S3 Bucket
+        run: |
+          echo "======================================"
+          echo "Testing S3 Bucket: ${{ github.event.inputs.pitt_id }}-assignment3"
+          echo "======================================"
+
+          BUCKET_NAME="${{ github.event.inputs.pitt_id }}-assignment3"
+
+          if aws s3 ls "s3://$BUCKET_NAME" 2>/dev/null; then
+            echo "PASS: S3 bucket exists: $BUCKET_NAME"
+          else
+            echo "FAIL: S3 bucket does not exist: $BUCKET_NAME"
+            exit 1
+          fi
+
+  check-lambda-functions:
+    name: Check Lambda Functions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Test Lambda Functions
+        run: |
+          echo "======================================"
+          echo "Testing Lambda Functions"
+          echo "======================================"
+
+          # Check each required function
+          for func in resize-lambda greyscale-lambda exif-lambda; do
+            if aws lambda get-function --function-name $func --region ${{ env.AWS_REGION }} 2>/dev/null; then
+              echo "PASS: $func exists"
+
+              # Check if using container image
+              PACKAGE_TYPE=$(aws lambda get-function \
+                --function-name $func \
+                --region ${{ env.AWS_REGION }} \
+                --query 'Configuration.PackageType' \
+                --output text)
+
+              if [ "$PACKAGE_TYPE" = "Image" ]; then
+                echo "PASS: $func is using container image"
+              else
+                echo "FAIL: $func is not using container image (found: $PACKAGE_TYPE)"
+                exit 1
+              fi
+            else
+              echo "FAIL: $func not found"
+              exit 1
+            fi
+            echo ""
+          done
+
+  check-ecr-repositories:
+    name: Check ECR Repositories
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Test ECR Repositories
+        run: |
+          echo "======================================"
+          echo "Testing ECR Repositories"
+          echo "======================================"
+
+          for repo in resize-lambda greyscale-lambda exif-lambda; do
+            IMAGE_COUNT=$(aws ecr list-images \
+              --repository-name $repo \
+              --region ${{ env.AWS_REGION }} \
+              --query 'length(imageIds)' \
+              --output text)
+
+            if [ "$IMAGE_COUNT" -gt 0 ]; then
+              echo "PASS: $repo has $IMAGE_COUNT image(s)"
+            else
+              echo "FAIL: $repo has no images"
+              exit 1
+            fi
+          done
+
+  check-sns-topic:
+    name: Check SNS Topic and Subscriptions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Test SNS Topic
+        run: |
+          echo "======================================"
+          echo "Testing SNS Topic"
+          echo "======================================"
+
+          # Check if SNS topic exists
+          TOPIC_ARN=$(aws sns list-topics \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Topics[?contains(TopicArn, `image-processing-topic`)].TopicArn' \
+            --output text)
+
+          if [ -n "$TOPIC_ARN" ]; then
+            echo "PASS: SNS topic exists: $TOPIC_ARN"
+
+            # Check subscriptions
+            echo ""
+            echo "Checking SNS subscriptions..."
+
+            SUBSCRIPTION_COUNT=$(aws sns list-subscriptions-by-topic \
+              --topic-arn "$TOPIC_ARN" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'length(Subscriptions)' \
+              --output text)
+
+            echo "Found $SUBSCRIPTION_COUNT subscription(s)"
+
+            if [ "$SUBSCRIPTION_COUNT" -ge 3 ]; then
+              echo "PASS: SNS topic has sufficient subscriptions"
+            else
+              echo "FAIL: SNS topic should have at least 3 subscriptions (one per Lambda)"
+              exit 1
+            fi
+          else
+            echo "FAIL: SNS topic 'image-processing-topic' not found"
+            exit 1
+          fi

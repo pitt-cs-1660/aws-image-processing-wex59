@@ -1,0 +1,229 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1  # update if you are in a different region
+  AWS_LAMBDA_ROLE_ARN: arn:aws:iam::523734927941:role/lambda-image-processing-role  # replace with your ARN
+
+jobs:
+  deploy-resize:
+    name: Deploy Resize Lambda
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push resize image to Amazon ECR
+        id: resize-build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: resize-lambda
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd lambdas/resize
+          ######
+          #
+          #  TODO: implement build and push to ECR
+          #
+          ######
+          exit 1
+
+      - name: Check if Lambda function exists
+        id: check-lambda-resize
+        run: |
+          if aws lambda get-function --function-name resize-lambda --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Lambda function
+        if: steps.check-lambda-resize.outputs.exists == 'false'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: resize-lambda
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws lambda create-function \
+            --function-name resize-lambda \
+            --package-type Image \
+            --code ImageUri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            --role ${{ env.AWS_LAMBDA_ROLE_ARN }} \
+            --timeout 30 \
+            --memory-size 512 \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Update resize Lambda function
+        if: steps.check-lambda-resize.outputs.exists == 'true'
+        uses: aws-actions/aws-lambda-deploy@v1.1.0
+        with:
+          function-name: resize-lambda
+          package-type: Image  # no zip!
+          image-uri: ${{ steps.resize-build-image.outputs.image }}  # ECR image URI from previous step
+          role: ${{ env.AWS_LAMBDA_ROLE_ARN }}
+          publish: true
+
+  deploy-greyscale:
+    name: Deploy Greyscale Lambda
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push greyscale image to Amazon ECR
+        id: greyscale-build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: greyscale-lambda
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd lambdas/greyscale
+          ######
+          #
+          #  TODO: implement build and push to ECR
+          #
+          ######
+          exit 1
+
+      - name: Check if Lambda function exists
+        id: check-lambda-greyscale
+        run: |
+          if aws lambda get-function --function-name greyscale-lambda --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Lambda function
+        if: steps.check-lambda-greyscale.outputs.exists == 'false'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: greyscale-lambda
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws lambda create-function \
+            --function-name greyscale-lambda \
+            --package-type Image \
+            --code ImageUri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            --role ${{ env.AWS_LAMBDA_ROLE_ARN }} \
+            --timeout 30 \
+            --memory-size 512 \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Update greyscale Lambda function
+        if: steps.check-lambda-greyscale.outputs.exists == 'true'
+        uses: aws-actions/aws-lambda-deploy@v1.1.0
+        with:
+          function-name: greyscale-lambda
+          package-type: Image  # no zip!
+          image-uri: ${{ steps.greyscale-build-image.outputs.image }}  # ECR image URI from previous step
+          role: ${{ env.AWS_LAMBDA_ROLE_ARN }}
+          publish: true
+
+
+  deploy-exif:
+    name: Deploy EXIF Lambda
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push exif image to Amazon ECR
+        id: exif-build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: exif-lambda
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd lambdas/exif
+          ######
+          #
+          #  TODO: implement build and push to ECR
+          #
+          ######
+          exit 1
+
+      - name: Check if Lambda function exists
+        id: check-lambda-exif
+        run: |
+          if aws lambda get-function --function-name exif-lambda --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Lambda function
+        if: steps.check-lambda-exif.outputs.exists == 'false'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: exif-lambda
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws lambda create-function \
+            --function-name exif-lambda \
+            --package-type Image \
+            --code ImageUri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            --role ${{ env.AWS_LAMBDA_ROLE_ARN }} \
+            --timeout 30 \
+            --memory-size 512 \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Update exif Lambda function
+        if: steps.check-lambda-exif.outputs.exists == 'true'
+        uses: aws-actions/aws-lambda-deploy@v1.1.0
+        with:
+          function-name: exif-lambda
+          package-type: Image  # no zip!
+          image-uri: ${{ steps.exif-build-image.outputs.image }}  # ECR image URI from previous step
+          role: ${{ env.AWS_LAMBDA_ROLE_ARN }}
+          publish: true
+

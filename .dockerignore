@@ -1,0 +1,33 @@
+# Ignore Git-related files
+.git
+.gitignore
+
+# Ignore build artifacts and temporary files
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.venv/
+env/
+venv/
+node_modules/ # If using Node.js
+dist/
+build/
+
+# Ignore editor and IDE specific files
+.vscode/
+.idea/
+*.swp
+*.bak
+*~
+
+# Ignore local testing artifacts
+.aws-sam/
+sam-build/
+template.yaml # If using SAM and it's not needed in the image
+
+# Ignore Docker-related files that are not part of the build context
+Dockerfile
+.dockerignore
+

@@ -1,0 +1,11 @@
+[project]
+name = "greyscale-lambda"
+version = "0.1.0"
+description = "Lambda function to convert images to greyscale"
+requires-python = ">=3.13"
+dependencies = [
+    # Add your dependencies here
+    # Example: "pillow>=10.0.0"
+    "boto3>=1.40.56",
+    "pillow>=12.0.0",
+]
