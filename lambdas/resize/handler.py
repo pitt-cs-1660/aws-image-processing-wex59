@@ -54,7 +54,8 @@ def resize_handler(event, context):
                     resized_image = image.resize((512, 512), Image.Resampling.LANCZOS)
                     print(f"Resized to: {resized_image.size}")
 
-                    # upload
+                    # upload processed image to /processed/resize/
+                    from pathlib import Path
                     filename = Path(object_key).name
                     output_key = f"processed/resize/{filename}"
                     upload_to_s3(bucket_name, output_key, resized_image)
